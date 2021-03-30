@@ -1,16 +1,13 @@
-import asyncio
-import logging
 import re
-from multiprocessing.context import Process
 from time import sleep
 
-import schedule
 import telebot
 from telebot import types
 
 from config import TOKEN
 from data_managing import save_hubs, delete_user, fetch_users, get_hubs_and_update, update_date
-from parcer_async import loop
+from parcer_async import get_links, post_date_evaluating
+from logger import logger
 
 bot = telebot.TeleBot(TOKEN)
 
@@ -22,11 +19,13 @@ def hello_handler(message):
     item2 = types.KeyboardButton('нет')
     markup.add(item1, item2)
     bot.send_message(message.from_user.id, "Доброго времени суток. Рассказать что я умею?", reply_markup=markup)
+    logger.info(f"User {message.from_user.id} is on server")
     bot.register_next_step_handler(message, answer_function)
 
 
 def answer_function(message):
     if message.text in ['да', 'Расскажи, что умеешь']:
+        logger.info(f"User {message.from_user.id} asks what bot can do")
         markup = types.ReplyKeyboardRemove(selective=False)
         bot.send_message(message.from_user.id,
                          "Могу записать интересующие тебя темы и отправлять тебе статьи по ним. Что тебе интересно?",
@@ -35,6 +34,7 @@ def answer_function(message):
                          "<о формате тем>")
     else:
         markup = types.ReplyKeyboardMarkup(row_width=2)
+        logger.info(f"User {message.from_user.id} is not interested in bot")
         item1 = types.KeyboardButton('Расскажи, что умеешь')
         markup.add(item1)
         bot.send_message(message.from_user.id, "Очень жаль :(", reply_markup=markup)
@@ -61,9 +61,11 @@ def text_handler(message):
     elif message.text == 'Удали меня из базы':
         delete_user(message.from_user.id)
         del_markup = types.ReplyKeyboardRemove(selective=False)
+        logger.info(f"User {message.from_user.id} deleted from database")
         bot.send_message(message.from_user.id, "Готово. Больше не буду слать тебе статьи.", reply_markup=del_markup)
 
     elif message.text == 'Спасибо!':
+        logger.info(f"User {message.from_user.id} is thanking you")
         bot.send_message(message.from_user.id, "Всегда рад помочь!", reply_markup=markup)
 
     elif message.text == 'Есть новые статьи?':
@@ -73,30 +75,45 @@ def text_handler(message):
     elif any(matching):
         hubs = [i for i in matching if i]
         save_hubs(message.from_user.id, hubs)
+        logger.info(f"Added hubs for user {message.from_user.id}: {hubs}")
         bot.send_message(message.from_user.id, "Окей, записал. Буду присылать тебе новые статьи :)",
                          reply_markup=markup)
     else:
+        logger.info(f"Text form user {message.from_user.id}: {message.text}")
         bot.send_message(message.from_user.id, "Не понимаю тебя :(?")
 
 
 def send_articles(user_id: str) -> None:
     hubs, date = get_hubs_and_update(user_id)
-    articles = asyncio.run(loop(hubs, date))
+    links = get_links(hubs)
+    articles = []
+    for link in links:
+        data = post_date_evaluating(link, date)
+        if data:
+            articles.append(data)
     update_date(user_id)
     for article in articles:
+        logger.info(f"Send article {article.link} for user {user_id}")
         bot.send_message(user_id,
-                         f"{article.header}\n{article.date.strftime('%B %d, %Y')}\n\n{article.link}")
+                         f"{article.header}\n{article.date.strftime('%d %B %Y')}\n\n{article.link}")
+    if not articles:
+        logger.info(f"Nothing for user {user_id}")
+        bot.send_message(user_id,
+                         "Похоже, никаких обновлений нет.")
 
 
 def pipeline():
     users = fetch_users()
+    logger.info(f"Registered users: {users}")
     for user in users:
         send_articles(user)
 
 
 if __name__ == '__main__':
-    try:
-        bot.polling(none_stop=True)
-    except Exception:
-        logging.error("Unsuccessful request to tg server")
-        sleep(15)
+    while True:
+        try:
+            logger.info("Bot started")
+            bot.polling(none_stop=True)
+        except Exception as e:
+            logger.error(f"Unsuccessful request to tg server, {e}")
+            sleep(5)
