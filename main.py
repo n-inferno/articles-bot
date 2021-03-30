@@ -6,7 +6,7 @@ from telebot import types
 
 from config import TOKEN
 from data_managing import save_hubs, delete_user, fetch_users, get_hubs_and_update, update_date
-from parcer_async import get_links, post_date_evaluating
+from parcer import get_links, post_date_evaluating
 from logger import logger
 
 bot = telebot.TeleBot(TOKEN)
