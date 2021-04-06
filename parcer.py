@@ -1,9 +1,10 @@
+import asyncio
 from collections import namedtuple
 from datetime import datetime, timedelta
 from typing import List, Tuple, Optional
 import locale
 
-import requests
+import aiohttp
 from bs4 import BeautifulSoup
 from logger import logger
 
@@ -12,20 +13,29 @@ URL = 'https://habr.com/ru/hub/{}/'
 article = namedtuple('Post', ['header', 'date', 'link'])
 
 
-def get_links(habs: List[str]) -> List[Tuple[str, str, str]]:
-    for hub in habs:
-        hub_url = URL.format(hub)
-        try:
-            resp = requests.get(hub_url, timeout=15)
-        except Exception as e:
-            logger.error(f'cannot load page {hub_url}, {e}')
-            return
-        logger.info(f'load {hub_url} successfully')
-        soup = BeautifulSoup(resp.text, features="html.parser")
-        links = []
+async def get_content(url, session):
+    async with session.get(url) as resp:
+        data = await resp.read()
+        logger.info(f'load {url} successfully')
+        return data
+
+
+async def get_links(habs: List[str]) -> Optional:
+    tasks = []
+
+    async with aiohttp.ClientSession() as session:
+        for hub in habs:
+            hub_url = URL.format(hub)
+            task = asyncio.create_task(get_content(hub_url, session))
+            tasks.append(task)
+        texts = await asyncio.gather(*tasks)
+
+    for text in texts:
+        soup = BeautifulSoup(text, features="html.parser")
+        sorted_links = []
         for i, j in zip(soup.find_all('a', 'post__title_link'), soup.find_all('span', 'post__time')):
-            links.append((i.text, i.get('href'), j.text))
-        return links
+            sorted_links.append((i.text, i.get('href'), j.text))
+        return sorted_links
 
 
 def post_date_evaluating(post: Tuple[str, str, str], last_update: datetime) -> Optional:
