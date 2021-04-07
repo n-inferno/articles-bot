@@ -1,9 +1,7 @@
 import asyncio
 import re
-from multiprocessing.context import Process
-from time import sleep
 
-import schedule
+import aioschedule
 from aiogram import Bot, Dispatcher, executor, types
 
 from config import TOKEN
@@ -103,24 +101,25 @@ async def send_articles(user_id: str) -> None:
         await bot.send_message(user_id, "Похоже, никаких обновлений нет.")
 
 
-def pipeline():
+async def pipeline() -> None:
     users = fetch_users()
     logger.info(f"Registered users: {users}")
     for user in users:
-        asyncio.run(send_articles(user))
+        await send_articles(user)
 
 
-def message_schedule():
-    schedule.every().minute.do(pipeline)
+async def message_schedule() -> None:
+    logger.info("Scheduler starting")
+    aioschedule.every(5).minutes.do(pipeline)
     while True:
-        schedule.run_pending()
-        sleep(1)
+        await aioschedule.run_pending()
+        await asyncio.sleep(1)
+
+
+async def on_startup(x) -> None:
+    asyncio.create_task(message_schedule())
 
 
 if __name__ == '__main__':
-    p1 = Process(target=message_schedule, args=())
-    p1.start()
-    logger.info("Schedule started")
-
     logger.info("Bot starting")
-    executor.start_polling(dp, skip_updates=True)
+    executor.start_polling(dp, skip_updates=True, on_startup=on_startup)
