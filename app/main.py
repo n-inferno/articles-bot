@@ -1,6 +1,9 @@
+import asyncio
 import re
+from multiprocessing.context import Process
 from time import sleep
 
+import schedule
 from aiogram import Bot, Dispatcher, executor, types
 
 from config import TOKEN
@@ -29,7 +32,8 @@ async def answer_function(message):
         await message.answer("Могу записать интересующие тебя темы и отправлять тебе статьи по ним. "
                              "Что тебе интересно?",
                              reply_markup=markup)
-        await message.answer("<о формате тем>")
+        await message.answer("Названия тем можно посмотреть на сайте habr.com, я использую сокращенные обозначения"
+                             " из адресной строки")
     else:
         markup = types.ReplyKeyboardMarkup(row_width=2)
         logger.info(f"User {message.from_user.id} is not interested in bot")
@@ -99,18 +103,24 @@ async def send_articles(user_id: str) -> None:
         await bot.send_message(user_id, "Похоже, никаких обновлений нет.")
 
 
-async def pipeline():
+def pipeline():
     users = fetch_users()
     logger.info(f"Registered users: {users}")
     for user in users:
-        await send_articles(user)
+        asyncio.run(send_articles(user))
+
+
+def message_schedule():
+    schedule.every().minute.do(pipeline)
+    while True:
+        schedule.run_pending()
+        sleep(1)
 
 
 if __name__ == '__main__':
-    while True:
-        try:
-            logger.info("Bot started")
-            executor.start_polling(dp, skip_updates=True)
-        except Exception as e:
-            logger.error(f"Unsuccessful request to tg server, {e}")
-            sleep(5)
+    p1 = Process(target=message_schedule, args=())
+    p1.start()
+    logger.info("Schedule started")
+
+    logger.info("Bot starting")
+    executor.start_polling(dp, skip_updates=True)
