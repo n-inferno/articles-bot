@@ -1,11 +1,12 @@
 import asyncio
 import re
+from typing import Union
 
 import aioschedule
 from aiogram import Bot, Dispatcher, executor, types
 
 from config import TOKEN
-from data_managing import save_hubs, delete_user, fetch_users, get_hubs_and_update, update_date
+from data_managing import save_hubs, delete_user, fetch_users, get_hubs, update_date
 from parcer import get_links, post_date_evaluating
 from logger import logger
 
@@ -14,7 +15,7 @@ dp = Dispatcher(bot)
 
 
 @dp.message_handler(commands=['start', 'help'])
-async def hello_handler(message: types.Message):
+async def hello_handler(message: types.Message) -> None:
     markup = types.ReplyKeyboardMarkup(row_width=2)
     item1 = types.KeyboardButton('да')
     item2 = types.KeyboardButton('нет')
@@ -23,7 +24,7 @@ async def hello_handler(message: types.Message):
     await message.answer("Доброго времени суток. Рассказать что я умею?", reply_markup=markup)
 
 
-async def answer_function(message):
+async def answer_function(message: types.Message) -> None:
     if message.text in ['да', 'Расскажи, что умеешь']:
         logger.info(f"User {message.from_user.id} asks what bot can do")
         markup = types.ReplyKeyboardRemove(selective=False)
@@ -41,7 +42,7 @@ async def answer_function(message):
 
 
 @dp.message_handler(content_types='text')
-async def text_handler(message):
+async def text_handler(message: types.Message) -> None:
     if 'привет' in message.text.lower():
         return await hello_handler(message)
 
@@ -71,7 +72,10 @@ async def text_handler(message):
 
     elif message.text == 'Есть новые статьи?':
         await message.answer("Сейчас посмотрю...", reply_markup=markup)
-        await send_articles(message.from_user.id)
+        result = await send_articles(message.from_user.id)
+
+        if result == 'nothing':
+            await message.answer("Похоже, никаких обновлений нет.")
 
     elif any(matching):
         hubs = [i for i in matching if i]
@@ -83,8 +87,8 @@ async def text_handler(message):
         await message.answer("Не понимаю тебя :(?")
 
 
-async def send_articles(user_id: str) -> None:
-    hubs, date = get_hubs_and_update(user_id)
+async def send_articles(user_id: str) -> Union[str, None]:
+    hubs, date = get_hubs(user_id)
     links = await get_links(hubs)
     articles = []
     for link in links:
@@ -98,7 +102,7 @@ async def send_articles(user_id: str) -> None:
                                f"{article.header}\n{article.date.strftime('%d %B %Y')}\n\n{article.link}")
     if not articles:
         logger.info(f"Nothing for user {user_id}")
-        await bot.send_message(user_id, "Похоже, никаких обновлений нет.")
+        return 'nothing'
 
 
 async def pipeline() -> None:
@@ -116,7 +120,7 @@ async def message_schedule() -> None:
         await asyncio.sleep(1)
 
 
-async def on_startup(x) -> None:
+async def on_startup(_) -> None:
     asyncio.create_task(message_schedule())
 
 

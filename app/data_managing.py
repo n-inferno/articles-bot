@@ -49,7 +49,7 @@ def update_date(user_id: str) -> None:
     db_execute(f"""UPDATE user_info SET last_update = '{datetime.now()}' WHERE user_id = '{user_id}'""")
 
 
-def get_hubs_and_update(user_id: str) -> Tuple[List, datetime]:
+def get_hubs(user_id: str) -> Tuple[List, datetime]:
     data = db_get('one', 'user_id', user_id)
     return json.loads(data[2]), datetime.fromisoformat(data[3])
 
@@ -58,5 +58,5 @@ def check_user_in_db(user_id: str) -> bool:
     return True if db_get('one', 'user_id', user_id) else False
 
 
-def fetch_users():
+def fetch_users() -> List[str]:
     return db_get('all', 'user_id')
