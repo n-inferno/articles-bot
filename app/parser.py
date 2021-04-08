@@ -30,12 +30,13 @@ async def get_links(habs: List[str]) -> List[Tuple[str, str, str]]:
             tasks.append(task)
         texts = await asyncio.gather(*tasks)
 
+    sorted_links = []
     for text in texts:
         soup = BeautifulSoup(text, features="html.parser")
-        sorted_links = []
         for i, j in zip(soup.find_all('a', 'post__title_link'), soup.find_all('span', 'post__time')):
             sorted_links.append((i.text, i.get('href'), j.text))
-        return sorted_links
+
+    return sorted_links
 
 
 def post_date_evaluating(post: Tuple[str, str, str], last_update: datetime) -> Union[bool, article]:
