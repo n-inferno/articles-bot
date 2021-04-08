@@ -7,7 +7,7 @@ from aiogram import Bot, Dispatcher, executor, types
 
 from config import TOKEN
 from data_managing import save_hubs, delete_user, fetch_users, get_hubs, update_date
-from parcer import get_links, post_date_evaluating
+from parser import get_links, post_date_evaluating
 from logger import logger
 
 bot = Bot(token=TOKEN)
