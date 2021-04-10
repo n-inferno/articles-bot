@@ -90,11 +90,11 @@ async def text_handler(message: types.Message) -> None:
 async def send_articles(user_id: str) -> Union[str, None]:
     hubs, date = get_hubs(user_id)
     links = await get_links(hubs)
-    articles = []
+    articles = set()
     for link in links:
         data = post_date_evaluating(link, date)
         if data:
-            articles.append(data)
+            articles.add(data)
     update_date(user_id)
     for article in articles:
         logger.info(f"Send article {article.link} for user {user_id}")
